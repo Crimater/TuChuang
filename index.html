@@ -24,6 +24,7 @@
             min-height: 100vh;
             margin: 0;
             position: relative;
+            padding: 20px;
             padding-bottom: 60px;
         }
 
@@ -49,14 +50,29 @@
 
         .upload-area {
             margin-bottom: 24px;
+            position: relative;
+        }
+
+        .file-input-container {
+            position: relative;
+            margin-bottom: 16px;
         }
 
         input[type="file"] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-label {
             display: block;
-            margin: 0 auto 16px;
-            padding: 12px;
+            padding: 40px 20px;
             background-color: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            border: 2px dashed rgba(255, 255, 255, 0.3);
             border-radius: 12px;
             font-size: 16px;
             color: #ffffff;
@@ -65,9 +81,29 @@
             cursor: pointer;
         }
 
-        input[type="file"]:hover {
+        .file-input-label:hover, .file-input-label.dragover {
             background-color: rgba(255, 255, 255, 0.3);
-            border-color: rgba(255, 255, 255, 0.4);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .file-input-label i {
+            display: block;
+            font-size: 24px;
+            margin-bottom: 10px;
+            opacity: 0.8;
+        }
+
+        .selected-file {
+            margin-top: 15px;
+            font-size: 14px;
+            padding: 8px 12px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            display: inline-block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         button {
@@ -95,6 +131,29 @@
             transform: translateY(0);
         }
 
+        button:disabled {
+            background-color: rgba(158, 158, 158, 0.7);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .progress-container {
+            height: 6px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            margin: 15px 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: #4caf50;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
         .result {
             margin-top: 24px;
             padding: 16px;
@@ -105,8 +164,23 @@
             color: #ffffff;
             min-height: 40px;
             transition: all 0.3s ease;
-            overflow-wrap: break-word;  /* 新增：允许在单词内换行 */
-            word-break: break-all;      /* 新增：允许在任意字符间断行 */
+            overflow-wrap: break-word;
+            word-break: break-all;
+        }
+
+        .result a {
+            color: #e3f2fd;
+            text-decoration: underline;
+        }
+
+        .result-success {
+            background-color: rgba(76, 175, 80, 0.15);
+            border-color: rgba(76, 175, 80, 0.3);
+        }
+
+        .result-error {
+            background-color: rgba(244, 67, 54, 0.15);
+            border-color: rgba(244, 67, 54, 0.3);
         }
         
         /* 紧凑版的运行时间样式 */
@@ -172,15 +246,56 @@
             letter-spacing: 0.5px;
             margin-top: 1px;
         }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 25px 20px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .file-input-label {
+                padding: 30px 15px;
+                font-size: 14px;
+            }
+            
+            .runtime-value {
+                gap: 5px;
+            }
+            
+            .runtime-unit {
+                min-width: 30px;
+            }
+            
+            .runtime-number {
+                font-size: 14px;
+            }
+            
+            .runtime-text {
+                font-size: 8px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>文件上传</h1>
+        <h1>真ikun免费图床</h1>
         <div class="upload-area">
             <form id="uploadForm">
-                <input type="file" id="fileInput" name="file" accept="image/*" required />
-                <button type="submit">上传文件</button>
+                <div class="file-input-container">
+                    <label for="fileInput" class="file-input-label" id="fileInputLabel">
+                        <i>📁</i>
+                        <span>点击选择或拖放文件到此处</span>
+                    </label>
+                    <input type="file" id="fileInput" name="file" accept="image/*" required />
+                </div>
+                <div id="selectedFile" class="selected-file"></div>
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <button type="submit" id="uploadButton">上传文件</button>
             </form>
         </div>
         <div id="result" class="result"></div>
@@ -214,49 +329,152 @@
     <script>
         // 文件上传功能
         const form = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+        const fileInputLabel = document.getElementById('fileInputLabel');
+        const selectedFileDiv = document.getElementById('selectedFile');
         const resultDiv = document.getElementById('result');
+        const uploadButton = document.getElementById('uploadButton');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
 
+        // 拖放功能
+        fileInputLabel.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileInputLabel.classList.add('dragover');
+        });
+
+        fileInputLabel.addEventListener('dragleave', () => {
+            fileInputLabel.classList.remove('dragover');
+        });
+
+        fileInputLabel.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileInputLabel.classList.remove('dragover');
+            
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                updateSelectedFile();
+            }
+        });
+
+        // 文件选择变化
+        fileInput.addEventListener('change', updateSelectedFile);
+
+        function updateSelectedFile() {
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const fileSize = file.size > 1024 * 1024 
+                    ? (file.size / (1024 * 1024)).toFixed(2) + ' MB' 
+                    : (file.size / 1024).toFixed(2) + ' KB';
+                
+                selectedFileDiv.textContent = `已选择: ${file.name} (${fileSize})`;
+            } else {
+                selectedFileDiv.textContent = '';
+            }
+        }
+
+        // 上传表单提交
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
 
             if (!file) {
-                resultDiv.innerHTML = '<p>请先选择文件！</p>';
+                showResult('请先选择文件！', 'error');
                 return;
             }
 
+            // 检查文件类型
+            if (!file.type.startsWith('image/')) {
+                showResult('请选择图片文件！', 'error');
+                return;
+            }
+
+            // 显示上传进度
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            uploadButton.disabled = true;
+            
             const formData = new FormData();
             formData.append('file', file);
 
             try {
-                const response = await fetch('https://api.xinyew.cn/api/jdtc', {
-                    method: 'POST',
-                    body: formData
+                const xhr = new XMLHttpRequest();
+                
+                // 上传进度事件
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percentComplete = (e.loaded / e.total) * 100;
+                        progressBar.style.width = percentComplete + '%';
+                    }
                 });
-
-                const data = await response.json();
-                if (data.errno === 0) {
-                    resultDiv.innerHTML = `
-                        <p>上传成功！</p>
-                        <p>图片链接: <a href="${data.data.url}" target="_blank">${data.data.url}</a></p>
-                        <p>图片文件名: ${data.data.imgFile}</p>
-                    `;
-                } else {
-                    resultDiv.innerHTML = `<p>${data.error}</p>`;
-                    // 请求失败后2秒自动刷新网页
+                
+                xhr.addEventListener('load', () => {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        if (data.errno === 0) {
+                            showResult(`
+                                <p>上传成功！</p>
+                                <p>图片链接: <a href="${data.data.url}" target="_blank">${data.data.url}</a></p>
+                                <p>图片文件名: ${data.data.imgFile}</p>
+                                <button onclick="copyToClipboard('${data.data.url}')" style="margin-top:10px;padding:6px 12px;font-size:14px;">复制链接</button>
+                            `, 'success');
+                        } else {
+                            showResult(`上传失败: ${data.error}`, 'error');
+                            // 请求失败后2秒自动刷新网页
+                            setTimeout(() => {
+                                location.reload();
+                            }, 2000);
+                        }
+                    } catch (error) {
+                        showResult('解析响应数据失败', 'error');
+                        setTimeout(() => {
+                            location.reload();
+                        }, 3000);
+                    } finally {
+                        uploadButton.disabled = false;
+                        progressContainer.style.display = 'none';
+                    }
+                });
+                
+                xhr.addEventListener('error', () => {
+                    showResult('网络错误，请重试', 'error');
+                    uploadButton.disabled = false;
+                    progressContainer.style.display = 'none';
                     setTimeout(() => {
                         location.reload();
-                    }, 2000);
-                }
+                    }, 3000);
+                });
+                
+                xhr.open('POST', 'https://api.xinyew.cn/api/jdtc');
+                xhr.send(formData);
+                
             } catch (error) {
-                resultDiv.innerHTML = `<p>请求失败：${error.message}</p>`;
-                // 请求失败后3秒自动刷新网页
+                showResult(`请求失败：${error.message}`, 'error');
+                uploadButton.disabled = false;
+                progressContainer.style.display = 'none';
                 setTimeout(() => {
                     location.reload();
                 }, 3000);
             }
         });
+
+        // 显示结果函数
+        function showResult(message, type = '') {
+            resultDiv.innerHTML = message;
+            resultDiv.className = 'result';
+            if (type) {
+                resultDiv.classList.add(`result-${type}`);
+            }
+        }
+
+        // 复制到剪贴板函数
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('链接已复制到剪贴板！');
+            }).catch(err => {
+                console.error('无法复制文本: ', err);
+            });
+        }
 
         // 计算并显示网站运行时间
         function updateRuntime() {
