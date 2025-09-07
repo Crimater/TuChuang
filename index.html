@@ -13,7 +13,6 @@
 
         body {
             font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-            background-image: url('https://yanxuan.nosdn.127.net/b5fd460e37448bbffae4fd8885134d67.jpg');
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
@@ -26,6 +25,7 @@
             position: relative;
             padding: 20px;
             padding-bottom: 60px;
+            transition: background-image 1s ease;
         }
 
         .container {
@@ -247,6 +247,38 @@
             margin-top: 1px;
         }
 
+        .bg-info {
+            position: fixed;
+            bottom: 50px;
+            right: 15px;
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 300px;
+            text-align: center;
+        }
+
+        .bg-refresh {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .bg-refresh:hover {
+            background-color: rgba(0, 0, 0, 0.6);
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 25px 20px;
@@ -276,6 +308,19 @@
             .runtime-text {
                 font-size: 8px;
             }
+
+            .bg-info {
+                bottom: 45px;
+                right: 10px;
+                font-size: 10px;
+                max-width: 200px;
+            }
+
+            .bg-refresh {
+                top: 10px;
+                right: 10px;
+                font-size: 10px;
+            }
         }
     </style>
 </head>
@@ -300,6 +345,12 @@
         </div>
         <div id="result" class="result"></div>
     </div>
+
+    <!-- 背景图片信息 -->
+    <div class="bg-info" id="bgInfo">今日必应美图加载中...</div>
+
+    <!-- 背景刷新按钮 -->
+    <div class="bg-refresh" id="bgRefresh">更换背景</div>
 
     <!-- 网站运行时间显示 -->
     <div class="runtime-container">
@@ -327,6 +378,84 @@
     </div>
 
     <script>
+        // 设置背景图片
+        async function setBackgroundImage() {
+            try {
+                // 显示加载状态
+                document.getElementById('bgInfo').textContent = '正在加载必应美图...';
+                
+                // 尝试从API获取必应每日图片
+                const response = await fetch('https://api.pearktrue.cn/api/bing/');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data && data.data && data.data.url) {
+                        // 预加载图片
+                        const img = new Image();
+                        img.onload = function() {
+                            // 设置背景图片
+                            document.body.style.backgroundImage = `url(${data.data.url})`;
+                            
+                            // 更新背景信息
+                            const bgInfo = document.getElementById('bgInfo');
+                            if (data.data.copyright) {
+                                bgInfo.textContent = data.data.copyright;
+                                bgInfo.title = data.data.copyright;
+                            } else {
+                                bgInfo.textContent = '今日必应美图';
+                            }
+                            
+                            // 保存到本地存储
+                            localStorage.setItem('bingImage', JSON.stringify({
+                                url: data.data.url,
+                                copyright: data.data.copyright || '今日必应美图',
+                                date: new Date().toDateString()
+                            }));
+                        };
+                        img.src = data.data.url;
+                    } else {
+                        setFallbackBackground();
+                    }
+                } else {
+                    setFallbackBackground();
+                }
+            } catch (error) {
+                console.error('获取必应图片失败:', error);
+                setFallbackBackground();
+            }
+        }
+
+        // 设置备用背景
+        function setFallbackBackground() {
+            document.body.style.backgroundImage = 'url(https://yanxuan.nosdn.127.net/b5fd460e37448bbffae4fd8885134d67.jpg)';
+            document.getElementById('bgInfo').textContent = '默认背景图片';
+        }
+
+        // 检查本地存储中是否有今天的图片
+        function checkLocalStorage() {
+            const saved = localStorage.getItem('bingImage');
+            if (saved) {
+                const data = JSON.parse(saved);
+                // 如果是今天的图片，直接使用
+                if (data.date === new Date().toDateString()) {
+                    document.body.style.backgroundImage = `url(${data.url})`;
+                    document.getElementById('bgInfo').textContent = data.copyright;
+                    document.getElementById('bgInfo').title = data.copyright;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // 页面加载时设置背景
+        if (!checkLocalStorage()) {
+            setBackgroundImage();
+        }
+
+        // 背景刷新按钮事件
+        document.getElementById('bgRefresh').addEventListener('click', setBackgroundImage);
+
         // 文件上传功能
         const form = document.getElementById('uploadForm');
         const fileInput = document.getElementById('fileInput');
